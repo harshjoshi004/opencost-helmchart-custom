@@ -1,0 +1,74 @@
+---
+name: chart-publish
+on:
+  push:
+    branches:
+      - main
+env:
+  HELM_DOCS_VERSION: '1.13.1'
+
+permissions: read-all
+
+jobs:
+  publish:
+    permissions:
+      contents: write # for helm/chart-releaser-action to push chart release and create a release
+      packages: write # for helm/chart-releaser-action to push chart release and create a release
+      id-token: write # for helm/chart-releaser-action to push chart release and create a release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Helm
+        uses: azure/setup-helm@5119fcb9089d432beecbf79bb2c7915207344b78 # v3
+
+      - name: Configure Git
+        run: |
+          git config user.name "helm-bot"
+          git config user.email "helm-bot@users.noreply.github.com"
+      - name: install helm-docs
+        run: |
+          cd /tmp
+          wget https://github.com/norwoodj/helm-docs/releases/download/v${{env.HELM_DOCS_VERSION}}/helm-docs_${{env.HELM_DOCS_VERSION}}_Linux_x86_64.tar.gz
+          tar -xvf helm-docs_${{env.HELM_DOCS_VERSION}}_Linux_x86_64.tar.gz
+          sudo mv helm-docs /usr/local/sbin
+      - name: run helm-docs
+        run: |
+          helm-docs .
+      - name: Login to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3
+        with:
+          registry: ghcr.io
+          username: ${ GITHUB_REPOSITORY_OWNER }
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@a917fd15b20e8b64b94d9158ad54cd6345335584 # v1.6.0
+        with:
+          charts_dir: charts
+          config: './.github/configs/cr.yaml'
+        env:
+          CR_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          CR_SKIP_EXISTING: true
+
+      - uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
+      - name: Push chart to GHCR
+        run: |
+          shopt -s nullglob
+          for pkg in .cr-release-packages/*; do
+            if [ -z "${pkg:-}" ]; then
+              break
+            fi
+            helm push "${pkg}" oci://ghcr.io/"${GITHUB_REPOSITORY_OWNER}"/charts |& tee .digest
+            cosign sign --yes $(cat .digest | awk -F "[, ]+" '/Pushed/{print $NF}')
+          done
+      - uses: oras-project/setup-oras@ca28077386065e263c03428f4ae0c09024817c93 # v1
+        with:
+          version: 1.2.0
+      - name: Push oci metadata to GHCR
+        run: |
+          oras push ghcr.io/"${GITHUB_REPOSITORY_OWNER}"/charts/opencost:artifacthub.io \
+          --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
+          artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
