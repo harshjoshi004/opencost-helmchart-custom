@@ -1,0 +1,9 @@
+{{- if .Values.csvConfig.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+name: {{ .Values.csvConfig.configMapName }}
+data:
+pricing.csv: |
+{{ .Files.Get .Values.csvConfig.filePath | indent 4 }}
+{{- end }}
