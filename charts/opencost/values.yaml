@@ -814,3 +814,6 @@ opencost:
       enablePromAccess: false
 # -- A list of volumes to be added to the pod
 extraVolumes: []
+
+csvConfig:
+  enabled: false

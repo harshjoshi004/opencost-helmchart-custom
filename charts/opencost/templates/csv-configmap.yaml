@@ -1,4 +1,4 @@
-{{- if .Values.csvConfig.enabled }}
+{{- if (.Values.csvConfig.enabled | default false) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

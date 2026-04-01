@@ -1,0 +1,101 @@
+# -----------------------------
+# CSV CONFIG (TOP LEVEL - IMPORTANT)
+# -----------------------------
+csvConfig:
+  enabled: true
+  configMapName: opencost-pricing-csv
+  filePath: prices/prices.csv   # must exist inside charts/opencost/
+
+# -----------------------------
+# OPENCOST CONFIG
+# -----------------------------
+opencost:
+  prometheus:
+    internal:
+      namespaceName: monitoring
+      serviceName: prometheus-kube-prometheus-prometheus
+      port: 9090
+
+  exporter:
+    defaultClusterId: "qa6-apps-gke"
+    cloudProviderApiKey: ""
+
+    extraEnv:
+      USE_CSV_PROVIDER: "true"
+      USE_CUSTOM_PROVIDER: "true"
+      CSV_PATH: "/var/opencost/pricing/pricing.csv"
+
+    extraVolumeMounts:
+      - name: opencost-pricing-csv
+        mountPath: /var/opencost/pricing
+        readOnly: true
+
+    replicas: 1
+
+    persistence:
+      enabled: false
+
+    apiIngress:
+      enabled: false
+
+  customPricing:
+    enabled: false
+    provider: "custom"
+    createConfigmap: true
+    costModel:
+      description: Modified pricing configuration
+      CPU: 1.5
+      spotCPU: 0.3
+      RAM: 0.5
+      spotRAM: 0.3
+      GPU: 2.5
+      storage: 0.7
+      zoneNetworkEgress: 0.4
+      regionNetworkEgress: 0.4
+      internetNetworkEgress: 0.4
+
+  metrics:
+    kubeStateMetrics:
+      emitKsmV1Metrics: false
+      emitKsmV1MetricsOnly: false
+
+    serviceMonitor:
+      enabled: false
+
+  ui:
+    enabled: true
+
+    ingress:
+      enabled: true
+      ingressClassName: ingress-nginx-office
+      hosts:
+        - host: opencost-qa6.sprinklr.com
+          paths:
+            - /
+
+      servicePort: http-ui
+      tls: []
+
+# -----------------------------
+# EXTRA VOLUMES (CONFIGMAP MOUNT)
+# -----------------------------
+extraVolumes:
+  - name: opencost-pricing-csv
+    configMap:
+      name: opencost-pricing-csv
+
+# -----------------------------
+# PLUGINS
+# -----------------------------
+plugins:
+  enabled: true
+  install:
+    enabled: true
+
+# -----------------------------
+# POD ANNOTATIONS
+# -----------------------------
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "9003"
